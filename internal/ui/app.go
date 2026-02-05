@@ -355,6 +355,7 @@ func (a *App) onAppActivate(ctx context.Context) {
 }
 
 func (a *App) initTray(ctx context.Context) {
+	slog.Warn("Starting.....")
 	if a.tray != nil {
 		err := a.tray.Start(<-a.poller.GetIPN())
 		if err != nil {

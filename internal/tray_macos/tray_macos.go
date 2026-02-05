@@ -1,8 +1,10 @@
 package tray_macos
 
 import (
+	"bytes"
 	_ "embed"
 	"fmt"
+	"log/slog"
 	"slices"
 	"sync"
 	"unique"
@@ -34,8 +36,9 @@ type Tray struct {
 	OnSelfNode   func()
 	OnQuit       func()
 
-	m    sync.Mutex
-	prev map[unique.Handle[string]][]any
+	m         sync.Mutex
+	prev      map[unique.Handle[string]][]any
+	prevBytes map[unique.Handle[string]][][]byte
 
 	appStart  func()
 	appClose  func()
@@ -60,7 +63,8 @@ func (t *Tray) Start(status *tsutil.IPNStatus) error {
 	}
 
 	onReady := func() {
-		systray.SetTitle("Trayscale")
+		systray.SetTitle("TS")
+		// t.updateStatusIcon(status)
 
 		t.showItem = systray.AddMenuItem("Show", "Show Trayscale")
 		go func() {
@@ -77,7 +81,7 @@ func (t *Tray) Start(status *tsutil.IPNStatus) error {
 		}()
 		t.exitToggleItem = systray.AddMenuItemCheckbox("Exit Node Enabled", "Allow use of this device as an exit node", status.ExitNodeActive())
 		go func() {
-			for range t.connToggleItem.ClickedCh {
+			for range t.exitToggleItem.ClickedCh {
 				t.OnExitToggle()
 			}
 		}()
@@ -99,11 +103,9 @@ func (t *Tray) Start(status *tsutil.IPNStatus) error {
 
 		t.update(status)
 
-		t.appStart()
-
 	}
 
-	fmt.Println("Starting loop")
+	slog.Info("Starting loop")
 	t.appStart, t.appClose = systray.RunWithExternalLoop(onReady, onExit)
 
 	// item, err := tray.New(
@@ -119,6 +121,9 @@ func (t *Tray) Start(status *tsutil.IPNStatus) error {
 	// }
 	// t.item = item
 	t.prev = make(map[unique.Handle[string]][]any)
+	t.prevBytes = make(map[unique.Handle[string]][][]byte)
+
+	t.appStart()
 
 	return nil
 }
@@ -131,7 +136,8 @@ func (t *Tray) Close() error {
 	t.m.Lock()
 	defer t.m.Unlock()
 
-	// systray.close()
+	t.appClose()
+	systray.Quit()
 	t.prev = nil
 	return nil
 }
@@ -162,6 +168,25 @@ func (t *Tray) dirty(key unique.Handle[string], vals ...any) bool {
 	return true
 }
 
+func (t *Tray) dirtyBytes(key unique.Handle[string], vals ...[]byte) bool {
+	prevBytesSlices := t.prevBytes[key]
+	equal := true
+	if len(prevBytesSlices) == 0 {
+		equal = false
+	}
+	for index, prevBytes := range prevBytesSlices {
+		if !bytes.Equal(vals[index], prevBytes) {
+			equal = false
+		}
+	}
+	if equal {
+		return false
+	}
+
+	t.prevBytes[key] = vals
+	return true
+}
+
 func (t *Tray) update(status *tsutil.IPNStatus) {
 	if t.trayReady == false {
 		return
@@ -171,7 +196,7 @@ func (t *Tray) update(status *tsutil.IPNStatus) {
 	connToggleLabel := connToggleText(status.Online())
 	exitToggleLabel := exitToggleText(status)
 
-	t.updateStatusIcon(status)
+	// t.updateStatusIcon(status)
 
 	if t.dirty(selfHandle, selfTitle, connected) {
 		t.selfNodeItem.SetTitle(fmt.Sprintf("This machine: %v", selfTitle))
@@ -198,11 +223,13 @@ func (t *Tray) update(status *tsutil.IPNStatus) {
 
 func (t *Tray) updateStatusIcon(status *tsutil.IPNStatus) {
 	newIcon := statusIcon(status)
-	if !t.dirty(statusIconHandle, newIcon) {
+	if !t.dirtyBytes(statusIconHandle, newIcon) {
 		return
 	}
+	fmt.Println("Adding icon")
 
 	systray.SetIcon(newIcon)
+	slog.Info("Set icon")
 }
 
 func statusIcon(status *tsutil.IPNStatus) []byte {
