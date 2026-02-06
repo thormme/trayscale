@@ -2,6 +2,22 @@
 
 package tray
 
+/*
+#cgo CFLAGS: -x objective-c
+#cgo LDFLAGS: -framework Cocoa
+#import <Cocoa/Cocoa.h>
+
+void HideDock(void) {
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+}
+
+void ShowDock(void) {
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+    [NSApp activateIgnoringOtherApps:YES];
+}
+*/
+import "C"
+
 import (
 	"bytes"
 	_ "embed"
@@ -125,6 +141,14 @@ func (t *trayImpl) Close() error {
 		t.appClose()
 	}
 	return nil
+}
+
+func (t *trayImpl) HideDock() {
+	C.HideDock()
+}
+
+func (t *trayImpl) ShowDock() {
+	C.ShowDock()
 }
 
 func (t *trayImpl) close() error {

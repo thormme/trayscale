@@ -7,6 +7,8 @@ type Tray interface {
 	Start(status *tsutil.IPNStatus) error
 	Close() error
 	Update(s tsutil.Status)
+	HideDock()
+	ShowDock()
 }
 
 // Callbacks holds the tray event handlers

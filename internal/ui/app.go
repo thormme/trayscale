@@ -342,6 +342,9 @@ func (a *App) onAppActivate(ctx context.Context) {
 
 	a.win = NewMainWindow(a)
 	a.win.MainWindow.ConnectCloseRequest(func() bool {
+		if a.tray != nil {
+			a.tray.HideDock()
+		}
 		a.win = nil
 		return false
 	})
@@ -367,6 +370,9 @@ func (a *App) initTray(ctx context.Context) {
 	a.tray = tray.New(tray.Callbacks{
 		OnShow: func() {
 			glib.IdleAdd(func() {
+				if a.tray != nil {
+					a.tray.ShowDock()
+				}
 				if a.app != nil {
 					a.app.Activate()
 				}

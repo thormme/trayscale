@@ -123,6 +123,12 @@ func (t *trayImpl) Close() error {
 	return err
 }
 
+// HideDock is a no-op on Linux
+func (t *trayImpl) HideDock() {}
+
+// ShowDock is a no-op on Linux
+func (t *trayImpl) ShowDock() {}
+
 func (t *trayImpl) Update(s tsutil.Status) {
 	if t == nil {
 		return
