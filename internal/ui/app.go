@@ -124,7 +124,9 @@ func (a *App) update(status tsutil.Status) {
 			a.files = nil
 		}
 
-		a.tray.Update(status)
+		if a.tray != nil {
+			a.tray.Update(status)
+		}
 
 		if a.win != nil {
 			a.win.Update(status)
@@ -439,7 +441,9 @@ func (a *App) initTray(ctx context.Context) {
 
 // Quit exits the app completely, causing Run to return.
 func (a *App) Quit() {
-	a.tray.Close()
+	if a.tray != nil {
+		a.tray.Close()
+	}
 	a.app.Quit()
 }
 

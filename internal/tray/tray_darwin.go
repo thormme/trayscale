@@ -63,9 +63,11 @@ func (t *trayImpl) Start(status *tsutil.IPNStatus) error {
 	onExit := func() {
 		t.trayReady = false
 		slog.Info("Tray exiting")
+		t.close()
 	}
 
 	onReady := func() {
+		systray.SetRemovalAllowed(true)
 		systray.SetTemplateIcon(statusIconActiveData, statusIconActiveData)
 		// systray.SetTitle("TS")
 
@@ -119,6 +121,13 @@ func (t *trayImpl) Start(status *tsutil.IPNStatus) error {
 }
 
 func (t *trayImpl) Close() error {
+	if t.appClose != nil {
+		t.appClose()
+	}
+	return nil
+}
+
+func (t *trayImpl) close() error {
 	if t == nil {
 		return nil
 	}
@@ -126,9 +135,10 @@ func (t *trayImpl) Close() error {
 	t.m.Lock()
 	defer t.m.Unlock()
 
-	if t.appClose != nil {
-		t.appClose()
-	}
+	t.appClose = nil
+	t.appStart = nil
+
+	slog.Info("Quit")
 	systray.Quit()
 	t.prev = nil
 	return nil
