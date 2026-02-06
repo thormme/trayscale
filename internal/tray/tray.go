@@ -1,3 +1,5 @@
+//go:build linux
+
 package tray
 
 import (
@@ -47,12 +49,8 @@ func handler(f func()) tray.MenuItemProp {
 	}))
 }
 
-type Tray struct {
-	OnShow       func()
-	OnConnToggle func()
-	OnExitToggle func()
-	OnSelfNode   func()
-	OnQuit       func()
+type trayImpl struct {
+	Callbacks
 
 	m    sync.Mutex
 	item *tray.Item
@@ -65,7 +63,12 @@ type Tray struct {
 	quitItem       *tray.MenuItem
 }
 
-func (t *Tray) Start(status *tsutil.IPNStatus) error {
+// New creates a new tray for the current platform
+func New(cb Callbacks) Tray {
+	return &trayImpl{Callbacks: cb}
+}
+
+func (t *trayImpl) Start(status *tsutil.IPNStatus) error {
 	if t.item != nil {
 		return nil
 	}
@@ -102,7 +105,7 @@ func (t *Tray) Start(status *tsutil.IPNStatus) error {
 	return nil
 }
 
-func (t *Tray) Close() error {
+func (t *trayImpl) Close() error {
 	if t == nil {
 		return nil
 	}
@@ -120,7 +123,7 @@ func (t *Tray) Close() error {
 	return err
 }
 
-func (t *Tray) Update(s tsutil.Status) {
+func (t *trayImpl) Update(s tsutil.Status) {
 	if t == nil {
 		return
 	}
@@ -136,7 +139,7 @@ func (t *Tray) Update(s tsutil.Status) {
 	t.update(status)
 }
 
-func (t *Tray) dirty(key unique.Handle[string], vals ...any) bool {
+func (t *trayImpl) dirty(key unique.Handle[string], vals ...any) bool {
 	prev := t.prev[key]
 	if slices.Equal(vals, prev) {
 		return false
@@ -146,7 +149,7 @@ func (t *Tray) dirty(key unique.Handle[string], vals ...any) bool {
 	return true
 }
 
-func (t *Tray) update(status *tsutil.IPNStatus) {
+func (t *trayImpl) update(status *tsutil.IPNStatus) {
 	if t.item == nil {
 		return
 	}
@@ -176,7 +179,7 @@ func (t *Tray) update(status *tsutil.IPNStatus) {
 	}
 }
 
-func (t *Tray) updateStatusIcon(status *tsutil.IPNStatus) {
+func (t *trayImpl) updateStatusIcon(status *tsutil.IPNStatus) {
 	newIcon := statusIcon(status)
 	if !t.dirty(statusIconHandle, newIcon) {
 		return

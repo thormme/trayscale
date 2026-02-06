@@ -12,9 +12,7 @@ import (
 
 	"deedles.dev/trayscale/internal/gutil"
 	"deedles.dev/trayscale/internal/metadata"
-
-	// "deedles.dev/trayscale/internal/tray"
-	"deedles.dev/trayscale/internal/tray_macos"
+	"deedles.dev/trayscale/internal/tray"
 	"deedles.dev/trayscale/internal/tsutil"
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	"github.com/diamondburned/gotk4/pkg/gdk/v4"
@@ -38,7 +36,7 @@ type App struct {
 	app      *adw.Application
 	win      *MainWindow
 	settings *gio.Settings
-	tray     *tray_macos.Tray
+	tray     tray.Tray
 
 	spinnum       int
 	operatorCheck bool
@@ -364,7 +362,7 @@ func (a *App) initTray(ctx context.Context) {
 		return
 	}
 
-	a.tray = &tray_macos.Tray{
+	a.tray = tray.New(tray.Callbacks{
 		OnShow: func() {
 			glib.IdleAdd(func() {
 				if a.app != nil {
@@ -430,7 +428,7 @@ func (a *App) initTray(ctx context.Context) {
 		OnQuit: func() {
 			a.Quit()
 		},
-	}
+	})
 
 	slog.Warn("Starting tray")
 	err := a.tray.Start(<-a.poller.GetIPN())
