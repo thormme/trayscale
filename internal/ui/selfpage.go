@@ -13,7 +13,6 @@ import (
 	"deedles.dev/trayscale/internal/gutil"
 	"deedles.dev/trayscale/internal/listmodels"
 	"deedles.dev/trayscale/internal/tsutil"
-	"deedles.dev/trayscale/internal/xnetip"
 	"deedles.dev/xiter"
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	"github.com/diamondburned/gotk4/pkg/core/gioutil"
@@ -137,7 +136,7 @@ func (page *SelfPage) init(a *App, status *tsutil.IPNStatus) {
 			removeButton.SetTooltipText("Remove")
 			removeButton.ConnectClicked(func() {
 				routes := slices.Collect(xiter.Filter(page.routeModel.All(), func(p netip.Prefix) bool {
-					return xnetip.ComparePrefixes(p, route) != 0
+					return p.Compare(route) != 0
 				}))
 				err := tsutil.AdvertiseRoutes(context.TODO(), routes)
 				if err != nil {
@@ -338,25 +337,25 @@ func (page *SelfPage) init(a *App, status *tsutil.IPNStatus) {
 
 		page.LastNetCheck.SetText(formatTime(time.Now()))
 		page.UDPRow.SetVisible(true)
-		page.UDP.SetFromIconName(boolIcon(r.UDP))
+		page.UDP.SetFromGIcon(boolIcon(r.UDP))
 		page.IPv4Row.SetVisible(true)
 		page.IPv4Icon.SetVisible(!r.IPv4)
-		page.IPv4Icon.SetFromIconName(boolIcon(r.IPv4))
+		page.IPv4Icon.SetFromGIcon(boolIcon(r.IPv4))
 		page.IPv4Addr.SetVisible(r.IPv4)
 		page.IPv4Addr.SetText(r.GlobalV4.String())
 		page.IPv6Row.SetVisible(true)
 		page.IPv6Icon.SetVisible(!r.IPv6)
-		page.IPv6Icon.SetFromIconName(boolIcon(r.IPv6))
+		page.IPv6Icon.SetFromGIcon(boolIcon(r.IPv6))
 		page.IPv6Addr.SetVisible(r.IPv6)
 		page.IPv6Addr.SetText(r.GlobalV6.String())
 		page.UPnPRow.SetVisible(true)
-		page.UPnP.SetFromIconName(optBoolIcon(r.UPnP))
+		page.UPnP.SetFromGIcon(optBoolIcon(r.UPnP))
 		page.PMPRow.SetVisible(true)
-		page.PMP.SetFromIconName(optBoolIcon(r.PMP))
+		page.PMP.SetFromGIcon(optBoolIcon(r.PMP))
 		page.PCPRow.SetVisible(true)
-		page.PCP.SetFromIconName(optBoolIcon(r.PCP))
+		page.PCP.SetFromGIcon(optBoolIcon(r.PCP))
 		page.CaptivePortalRow.SetVisible(true)
-		page.CaptivePortal.SetFromIconName(optBoolIcon(r.CaptivePortal))
+		page.CaptivePortal.SetFromGIcon(optBoolIcon(r.CaptivePortal))
 		page.PreferredDERPRow.SetVisible(true)
 		page.PreferredDERP.SetText(dm.Regions[r.PreferredDERP].RegionName)
 
