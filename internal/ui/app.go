@@ -54,6 +54,15 @@ func (a *App) clip(v *glib.Value) {
 }
 
 func (a *App) notify(title, body string) {
+	// Without a session bus, GLib falls back to the
+	// org.freedesktop.Notifications backend anyway, which fails with
+	// GLib-GIO assertions on a nil connection. This is the normal
+	// case on macOS when not running from an app bundle.
+	if a.app.DBusConnection() == nil {
+		slog.Debug("no D-Bus session connection, skipping notification", "title", title)
+		return
+	}
+
 	icon, iconerr := gio.NewIconForString(metadata.AppID)
 
 	n := gio.NewNotification(title)
