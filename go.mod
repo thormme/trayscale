@@ -5,6 +5,7 @@ go 1.27.1
 require (
 	deedles.dev/tray v0.1.11-0.20260216023918-8e44c43dfc0b
 	deedles.dev/xiter v0.2.1
+	fyne.io/systray v1.12.2
 	github.com/diamondburned/gotk4-adwaita/pkg v0.0.0-20260808200908-d4aecaa0ff32
 	github.com/diamondburned/gotk4/pkg v0.4.1
 	github.com/inhies/go-bytesize v0.0.0-20220417184213-4913239db9cf
@@ -24,7 +25,6 @@ require (
 	dev.gaijin.team/go/exhaustruct/v5 v5.0.3 // indirect
 	dev.gaijin.team/go/golib v0.8.1 // indirect
 	filippo.io/edwards25519 v1.2.0 // indirect
-	fyne.io/systray v1.12.2 // indirect
 	github.com/4meepo/tagalign v1.4.3 // indirect
 	github.com/Abirdcfly/dupword v0.1.8 // indirect
 	github.com/AdminBenni/iota-mixing v1.0.0 // indirect
