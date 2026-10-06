@@ -95,10 +95,12 @@ func (p *Poller) Run(ctx context.Context) {
 }
 
 func (p *Poller) watchIPN(ctx context.Context) {
-	// NotifyInitialNetMap is kept so older daemons that do not send
-	// InitialStatus still bootstrap. RateLimit cannot be combined with
-	// PeerChanges / NoNetMap / InitialStatus (HTTP 400).
-	const watcherOpts = ipn.NotifyInitialState |
+	// NotifyInitialNetMap is requested so older daemons that do not
+	// send InitialStatus still bootstrap, but newer daemons reject it
+	// (HTTP 400), so it is dropped if the daemon refuses the mask.
+	// RateLimit cannot be combined with PeerChanges / NoNetMap /
+	// InitialStatus (also HTTP 400).
+	watcherOpts := ipn.NotifyInitialState |
 		ipn.NotifyInitialPrefs |
 		ipn.NotifyInitialNetMap |
 		ipn.NotifyNoPrivateKeys |
@@ -113,6 +115,12 @@ watch:
 	}
 	watcher, err := localClient.WatchIPNBus(ctx, watcherOpts)
 	if err != nil {
+		// The local client reports a non-200 response with only its
+		// status line as the error text.
+		if watcherOpts&ipn.NotifyInitialNetMap != 0 && err.Error() == "400 Bad Request" {
+			watcherOpts &^= ipn.NotifyInitialNetMap
+			goto watch
+		}
 		slog.Error("start IPN bus watcher", "err", err)
 		select {
 		case <-ctx.Done():
