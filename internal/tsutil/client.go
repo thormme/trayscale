@@ -7,13 +7,11 @@ import (
 	"io"
 	"log/slog"
 	"net/netip"
-	"time"
 
 	"tailscale.com/client/local"
 	"tailscale.com/client/tailscale/apitype"
 	"tailscale.com/cmd/tailscale/cli"
 	"tailscale.com/ipn"
-	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/net/netcheck"
 	"tailscale.com/net/netmon"
 	"tailscale.com/tailcfg"
@@ -39,17 +37,6 @@ func initMonitor() *netmon.Monitor {
 	return monitor
 }
 
-// GetStatus returns the status of the connection to the Tailscale
-// network. If the network is not currently connected, it returns
-// nil, nil.
-func GetStatus(ctx context.Context) (*ipnstate.Status, error) {
-	st, err := localClient.Status(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("get tailscale status: %w", err)
-	}
-	return st, nil
-}
-
 // Prefs returns the options of the local node.
 func Prefs(ctx context.Context) (*ipn.Prefs, error) {
 	return localClient.GetPrefs(ctx)
@@ -57,12 +44,12 @@ func Prefs(ctx context.Context) (*ipn.Prefs, error) {
 
 // Start connects the local peer to the Tailscale network.
 func Start(ctx context.Context) error {
-	return cli.Run([]string{"up"})
+	return cli.RunWithContext(ctx, []string{"up"})
 }
 
 // Stop disconnects the local peer from the Tailscale network.
 func Stop(ctx context.Context) error {
-	return cli.Run([]string{"down"})
+	return cli.RunWithContext(ctx, []string{"down"})
 }
 
 // ExitNode uses the specified peer as an exit node, or unsets
@@ -188,6 +175,24 @@ func AcceptRoutes(ctx context.Context, accept bool) error {
 	return nil
 }
 
+// AcceptDNS sets whether or not the Tailscale DNS config should be
+// used.
+func AcceptDNS(ctx context.Context, accept bool) error {
+	prefs := ipn.Prefs{
+		CorpDNS: accept,
+	}
+
+	_, err := localClient.EditPrefs(ctx, &ipn.MaskedPrefs{
+		Prefs:      prefs,
+		CorpDNSSet: true,
+	})
+	if err != nil {
+		return fmt.Errorf("edit prefs: %w", err)
+	}
+
+	return nil
+}
+
 // SetControlURL changes the URL of the control plane server used by
 // the daemon. If controlURL is empty, the default Tailscale server is
 // used.
@@ -245,8 +250,7 @@ func DeleteWaitingFile(ctx context.Context, name string) error {
 // WaitingFiles polls for any pending incoming files. It returns
 // quickly if there are no files currently pending.
 func WaitingFiles(ctx context.Context) ([]apitype.WaitingFile, error) {
-	// TODO: https://github.com/tailscale/tailscale/issues/8911
-	return localClient.AwaitWaitingFiles(ctx, time.Second)
+	return localClient.AwaitWaitingFiles(ctx, 0)
 }
 
 func FileTargets(ctx context.Context) ([]apitype.FileTarget, error) {

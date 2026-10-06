@@ -3,7 +3,6 @@ package ui
 import (
 	"context"
 	_ "embed"
-	"fmt"
 	"log/slog"
 	"net/netip"
 	"slices"
@@ -12,6 +11,7 @@ import (
 
 	"deedles.dev/trayscale/internal/gutil"
 	"deedles.dev/trayscale/internal/listmodels"
+	"deedles.dev/trayscale/internal/locale"
 	"deedles.dev/trayscale/internal/tsutil"
 	"deedles.dev/xiter"
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
@@ -28,34 +28,15 @@ import (
 var peerPageXML string
 
 type PeerPage struct {
-	app     *App
-	row     *PageRow
-	peer    tailcfg.NodeView
-	actions *gio.SimpleActionGroup
+	app       *App
+	stackPage *adw.ViewStackPage
+	peer      tailcfg.NodeView
+	actions   *gio.SimpleActionGroup
 
 	Page                  *adw.StatusPage
 	IPList                *gtk.ListBox
 	AdvertisedRoutesGroup *adw.PreferencesGroup
 	AdvertisedRoutesList  *gtk.ListBox
-	UDPRow                *adw.ActionRow
-	UDP                   *gtk.Image
-	IPv4Row               *adw.ActionRow
-	IPv4Icon              *gtk.Image
-	IPv4Addr              *gtk.Label
-	IPv6Row               *adw.ActionRow
-	IPv6Icon              *gtk.Image
-	IPv6Addr              *gtk.Label
-	UPnPRow               *adw.ActionRow
-	UPnP                  *gtk.Image
-	PMPRow                *adw.ActionRow
-	PMP                   *gtk.Image
-	PCPRow                *adw.ActionRow
-	PCP                   *gtk.Image
-	HairPinningRow        *adw.ActionRow
-	HairPinning           *gtk.Image
-	PreferredDERPRow      *adw.ActionRow
-	PreferredDERP         *gtk.Label
-	DERPLatencies         *adw.ExpanderRow
 	MiscGroup             *adw.PreferencesGroup
 	ExitNodeRow           *adw.SwitchRow
 	OnlineRow             *adw.ActionRow
@@ -70,8 +51,6 @@ type PeerPage struct {
 	RxBytes               *gtk.Label
 	TxBytesRow            *adw.ActionRow
 	TxBytes               *gtk.Label
-	SendFileBurron        *adw.ButtonRow
-	SendDirButton         *adw.ButtonRow
 	DropTarget            *gtk.DropTarget
 
 	sendFileAction *gio.SimpleAction
@@ -96,7 +75,7 @@ func (page *PeerPage) init(a *App, status *tsutil.IPNStatus, peer tailcfg.NodeVi
 	copyFQDNAction := gio.NewSimpleAction("copyFQDN", nil)
 	copyFQDNAction.ConnectActivate(func(p *glib.Variant) {
 		a.clip(glib.NewValue(strings.TrimSuffix(page.peer.Name(), ".")))
-		a.win.Toast("Copied FQDN to clipboard")
+		a.win.Toast(locale.Get("Copied FQDN to clipboard"))
 	})
 	page.actions.AddAction(copyFQDNAction)
 
@@ -111,7 +90,7 @@ func (page *PeerPage) init(a *App, status *tsutil.IPNStatus, peer tailcfg.NodeVi
 			open, finish = dialog.SelectMultipleFolders, dialog.SelectMultipleFoldersFinish
 		}
 
-		dialog.SetTitle(fmt.Sprintf("Select %v(s) to send to %v", mode, page.peer.Hostinfo().Hostname()))
+		dialog.SetTitle(locale.Get("Select %v(s) to send to %v", mode, page.peer.Hostinfo().Hostname()))
 
 		open(context.TODO(), &a.win.MainWindow.Window, func(res gio.AsyncResulter) {
 			files, err := finish(res)
@@ -150,10 +129,10 @@ func (page *PeerPage) init(a *App, status *tsutil.IPNStatus, peer tailcfg.NodeVi
 			copyButton.SetMarginTop(12) // Why is this necessary?
 			copyButton.SetMarginBottom(12)
 			copyButton.SetHasFrame(false)
-			copyButton.SetTooltipText("Copy to Clipboard")
+			copyButton.SetTooltipText(locale.Get("Copy to Clipboard"))
 			copyButton.ConnectClicked(func() {
 				a.clip(glib.NewValue(addr.String()))
-				a.win.Toast("Copied to clipboard")
+				a.win.Toast(locale.Get("Copied to clipboard"))
 			})
 
 			row := adw.NewActionRow()
@@ -167,7 +146,7 @@ func (page *PeerPage) init(a *App, status *tsutil.IPNStatus, peer tailcfg.NodeVi
 	)
 
 	ipListPlaceholder := adw.NewActionRow()
-	ipListPlaceholder.SetTitle("No addresses.")
+	ipListPlaceholder.SetTitle(locale.Get("No addresses."))
 	page.IPList.SetPlaceholder(ipListPlaceholder)
 
 	page.routeModel = gioutil.NewListModel[netip.Prefix]()
@@ -180,7 +159,7 @@ func (page *PeerPage) init(a *App, status *tsutil.IPNStatus, peer tailcfg.NodeVi
 			removeButton.SetMarginTop(12)
 			removeButton.SetMarginBottom(12)
 			removeButton.SetHasFrame(false)
-			removeButton.SetTooltipText("Remove")
+			removeButton.SetTooltipText(locale.Get("Remove"))
 			removeButton.ConnectClicked(func() {
 				routes := slices.Collect(xiter.Filter(page.routeModel.All(), func(p netip.Prefix) bool {
 					return p.Compare(route) != 0
@@ -202,7 +181,7 @@ func (page *PeerPage) init(a *App, status *tsutil.IPNStatus, peer tailcfg.NodeVi
 	)
 
 	advertisedRoutesListPlaceholder := adw.NewActionRow()
-	advertisedRoutesListPlaceholder.SetTitle("No advertised routes.")
+	advertisedRoutesListPlaceholder.SetTitle(locale.Get("No advertised routes."))
 	page.AdvertisedRoutesList.SetPlaceholder(advertisedRoutesListPlaceholder)
 
 	page.ExitNodeRow.ActivatableWidget().(*gtk.Switch).ConnectStateSet(func(s bool) bool {
@@ -240,9 +219,8 @@ func (page *PeerPage) Actions() gio.ActionGrouper {
 	return page.actions
 }
 
-func (page *PeerPage) Init(row *PageRow) {
-	page.row = row
-	row.Row().AddCSSClass("peer")
+func (page *PeerPage) Bind(stackPage *adw.ViewStackPage) {
+	page.stackPage = stackPage
 }
 
 func (page *PeerPage) Update(s tsutil.Status) bool {
@@ -255,14 +233,14 @@ func (page *PeerPage) Update(s tsutil.Status) bool {
 	}
 
 	page.peer = status.Peers[page.peer.StableID()]
-	if !page.peer.Valid() {
+	if !page.peer.Valid() || tsutil.IsShareeNode(page.peer) {
 		return false
 	}
 
 	page.sendFileAction.SetEnabled(status.FileTargets.Contains(page.peer.StableID()))
 
 	online := page.peer.Online().Get()
-	exitNodeOption := tsaddr.ContainsExitRoutes(page.peer.AllowedIPs())
+	exitNodeOption := peerIsExitNodeOption(page.peer)
 	exitNode := page.peer.Equal(status.ExitNode())
 
 	var enginePeer ipnstate.PeerStatusLite
@@ -270,10 +248,9 @@ func (page *PeerPage) Update(s tsutil.Status) bool {
 		enginePeer = status.Engine.LivePeers[page.peer.Key()]
 	}
 
-	page.row.SetTitle(peerName(page.peer))
-	page.row.SetSubtitle(peerSubtitle(exitNodeOption, exitNode))
-	page.row.SetIcon(peerIcon(online, exitNodeOption, exitNode))
-	gutil.SetCSSClass(page.row.Row(), "online", online)
+	page.stackPage.SetTitle(peerName(page.peer))
+	page.stackPage.SetIconName(peerIconName(online, exitNodeOption, exitNode))
+	page.stackPage.SetNeedsAttention(exitNode)
 
 	page.Page.SetTitle(page.peer.Hostinfo().Hostname())
 	page.Page.SetDescription(page.peer.Name())
@@ -307,40 +284,32 @@ func (page *PeerPage) Update(s tsutil.Status) bool {
 }
 
 func peerName(peer tailcfg.NodeView) string {
+	if !peer.Valid() {
+		return ""
+	}
 	return peer.DisplayName(true)
 }
 
-func peerSubtitle(exitNodeOption, exitNode bool) string {
-	if exitNode {
-		return "Current exit node"
-	}
-	if exitNodeOption {
-		return "Exit node option"
-	}
-	return ""
+func peerIsExitNodeOption(peer tailcfg.NodeView) bool {
+	return peer.Valid() && tsaddr.ContainsExitRoutes(peer.AllowedIPs())
 }
 
-var (
-	peerIconExitNodeOffline = gio.NewThemedIconWithDefaultFallbacks("security-low-symbolic")
-	peerIconExitNodeOnline  = gio.NewThemedIconWithDefaultFallbacks("security-high-symbolic")
-	peerIconOffline         = gio.NewThemedIconWithDefaultFallbacks("network-offline-symbolic")
-	peerIconExitNodeOption  = gio.NewThemedIconWithDefaultFallbacks("network-vpn-symbolic")
-	peerIconDefault         = gio.NewThemedIconWithDefaultFallbacks("network-transmit-receive-symbolic")
-)
+func peerIsOnline(peer tailcfg.NodeView) bool {
+	return peer.Valid() && peer.Online().Get()
+}
 
-func peerIcon(online, exitNodeOption, exitNode bool) gio.Iconner {
+func peerIconName(online, exitNodeOption, exitNode bool) string {
 	if exitNode {
 		if !online {
-			return peerIconExitNodeOffline
+			return "security-low-symbolic"
 		}
-		return peerIconExitNodeOnline
+		return "security-high-symbolic"
 	}
 	if !online {
-		return peerIconOffline
+		return "network-offline-symbolic"
 	}
 	if exitNodeOption {
-		return peerIconExitNodeOption
+		return "network-vpn-symbolic"
 	}
-
-	return peerIconDefault
+	return "network-transmit-receive-symbolic"
 }

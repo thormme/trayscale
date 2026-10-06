@@ -3,7 +3,6 @@ package tsutil
 import (
 	"cmp"
 
-	"tailscale.com/client/tailscale/apitype"
 	"tailscale.com/tailcfg"
 )
 
@@ -14,6 +13,17 @@ func IsMullvad(peer tailcfg.NodeView) bool {
 	return peer.Tags().ContainsFunc(func(tag string) bool {
 		return tag == "tag:mullvad-exit-node"
 	})
+}
+
+// IsShareeNode reports whether peer is in the netmap only because it
+// belongs to a user that a device was shared to. These are hidden by
+// tailscale status and should not appear in the peer list.
+func IsShareeNode(peer tailcfg.NodeView) bool {
+	if !peer.Valid() {
+		return false
+	}
+	hi := peer.Hostinfo()
+	return hi.Valid() && hi.ShareeNode()
 }
 
 // CanMullvad returns true if peer is allowed to access Mullvad exit
@@ -31,11 +41,8 @@ func CompareLocations(loc1, loc2 tailcfg.LocationView) int {
 	)
 }
 
-// ComparePeers compares two peers. It does so by location if
-// available, then by hostname. It returns the peers in a
-// deterministic order if their locations or hostnames are identical,
-// so the result of calling this is never 0. To determine if peers are
-// the same, compare their IDs manually.
+// ComparePeers orders two peers by location if both have one, then by
+// hostname, then by node ID. Distinct IDs always compare as non-zero.
 func ComparePeers(p1, p2 tailcfg.NodeView) int {
 	i1 := p1.Hostinfo()
 	i2 := p2.Hostinfo()
@@ -48,14 +55,5 @@ func ComparePeers(p1, p2 tailcfg.NodeView) int {
 		loc,
 		cmp.Compare(i1.Hostname(), i2.Hostname()),
 		cmp.Compare(p1.ID(), p2.ID()),
-	)
-}
-
-// CompareWaitingFiles compares two incoming files first by name and
-// then by size.
-func CompareWaitingFiles(f1, f2 apitype.WaitingFile) int {
-	return cmp.Or(
-		cmp.Compare(f1.Name, f2.Name),
-		cmp.Compare(f1.Size, f2.Size),
 	)
 }

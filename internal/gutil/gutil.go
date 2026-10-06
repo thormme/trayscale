@@ -5,6 +5,7 @@ import (
 	"iter"
 	"reflect"
 
+	"deedles.dev/trayscale/internal/locale"
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
 	"github.com/diamondburned/gotk4/pkg/core/gerror"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
@@ -61,6 +62,7 @@ func FillFromBuilder[T any](dst *T, builder *gtk.Builder) {
 // from embedded files.
 func FillFromUI[T any](into *T, xml ...string) {
 	builder := gtk.NewBuilder()
+	builder.SetTranslationDomain(locale.TranslationDomain)
 	for _, v := range xml {
 		builder.AddFromString(v)
 	}
@@ -71,8 +73,8 @@ func FillFromUI[T any](into *T, xml ...string) {
 // ErrHasCode returns true if and only if err is a [gerror.GError] and
 // its error code is code.
 func ErrHasCode(err error, code int) bool {
-	var gerr *gerror.GError
-	if !errors.As(err, &gerr) {
+	gerr, ok := errors.AsType[*gerror.GError](err)
+	if !ok {
 		return false
 	}
 	return gerr.ErrorCode() == code
@@ -146,27 +148,6 @@ func PointerToWidgetter[T any, P interface {
 		return nil
 	}
 	return p
-}
-
-// Classy wraps the CSS-related methods of a gtk.Widget.
-type Classy interface {
-	AddCSSClass(string)
-	RemoveCSSClass(string)
-	HasCSSClass(string) bool
-	CSSClasses() []string
-}
-
-// SetCSSClass adds or removes a CSS class based on a boolean
-// argument.
-func SetCSSClass(w Classy, class string, force bool) {
-	if force {
-		w.AddCSSClass(class)
-		return
-	}
-
-	if !force {
-		w.RemoveCSSClass(class)
-	}
 }
 
 // Caster wraps the [glib.Object.Cast] method.

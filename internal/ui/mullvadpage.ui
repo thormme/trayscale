@@ -5,7 +5,7 @@
   <requires lib="gtk" version="4.12"/>
   <requires lib="libadwaita" version="1.0"/>
   <object class="AdwStatusPage" id="Page">
-    <property name="title">Mullvad Exit Nodes</property>
+    <property name="title" translatable="yes">Mullvad Exit Nodes</property>
     <child>
       <object class="AdwClamp">
         <child>
@@ -13,9 +13,24 @@
             <property name="orientation">vertical</property>
             <property name="spacing">12</property>
             <child>
+              <object class="GtkSearchEntry" id="SearchEntry">
+                <property name="hexpand">True</property>
+                <property name="placeholder-text">Search locations</property>
+              </object>
+            </child>
+            <child>
               <object class="GtkListBox" id="LocationList">
                 <property name="css-classes">boxed-list</property>
                 <property name="selection-mode">none</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="EmptyLabel">
+                <property name="css-classes">dim-label</property>
+                <property name="halign">center</property>
+                <property name="label" translatable="yes">No matching exit nodes</property>
+                <property name="margin-top">24</property>
+                <property name="visible">False</property>
               </object>
             </child>
           </object>

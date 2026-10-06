@@ -12,6 +12,7 @@ import (
 
 	"deedles.dev/trayscale/internal/gutil"
 	"deedles.dev/trayscale/internal/listmodels"
+	"deedles.dev/trayscale/internal/locale"
 	"deedles.dev/trayscale/internal/tsutil"
 	"deedles.dev/xiter"
 	"github.com/diamondburned/gotk4-adwaita/pkg/adw"
@@ -24,16 +25,14 @@ import (
 	"tailscale.com/tailcfg"
 )
 
-var selfIcon = gio.NewThemedIconWithDefaultFallbacks("computer-symbolic")
-
 //go:embed selfpage.ui
 var selfPageXML string
 
 type SelfPage struct {
-	app     *App
-	row     *PageRow
-	peer    tailcfg.NodeView
-	actions *gio.SimpleActionGroup
+	app       *App
+	stackPage *adw.ViewStackPage
+	peer      tailcfg.NodeView
+	actions   *gio.SimpleActionGroup
 
 	Page                 *adw.StatusPage
 	IPList               *gtk.ListBox
@@ -41,6 +40,7 @@ type SelfPage struct {
 	AdvertiseExitNodeRow *adw.SwitchRow
 	AllowLANAccessRow    *adw.SwitchRow
 	AcceptRoutesRow      *adw.SwitchRow
+	AcceptDNSRow         *adw.SwitchRow
 	AdvertisedRoutesList *gtk.ListBox
 	AdvertiseRouteButton *gtk.Button
 	NetCheckGroup        *adw.PreferencesGroup
@@ -71,6 +71,8 @@ type SelfPage struct {
 	addrModel  *gioutil.ListModel[netip.Addr]
 	routeModel *gioutil.ListModel[netip.Prefix]
 	fileModel  *gioutil.ListModel[apitype.WaitingFile]
+
+	incomingFiles int
 }
 
 func NewSelfPage(a *App, status *tsutil.IPNStatus) *SelfPage {
@@ -82,14 +84,17 @@ func NewSelfPage(a *App, status *tsutil.IPNStatus) *SelfPage {
 
 func (page *SelfPage) init(a *App, status *tsutil.IPNStatus) {
 	page.app = a
-	page.peer = status.NetMap.SelfNode
+	page.peer, _ = status.Self()
+	if a.files != nil {
+		page.incomingFiles = len(*a.files)
+	}
 
 	page.actions = gio.NewSimpleActionGroup()
 
 	copyFQDN := gio.NewSimpleAction("copyFQDN", nil)
 	copyFQDN.ConnectActivate(func(p *glib.Variant) {
 		a.clip(glib.NewValue(strings.TrimSuffix(page.peer.Name(), ".")))
-		a.win.Toast("Copied FQDN to clipboard")
+		a.win.Toast(locale.Get("Copied FQDN to clipboard"))
 	})
 	page.actions.AddAction(copyFQDN)
 
@@ -103,10 +108,10 @@ func (page *SelfPage) init(a *App, status *tsutil.IPNStatus) {
 			copyButton.SetMarginTop(12) // Why is this necessary?
 			copyButton.SetMarginBottom(12)
 			copyButton.SetHasFrame(false)
-			copyButton.SetTooltipText("Copy to Clipboard")
+			copyButton.SetTooltipText(locale.Get("Copy to Clipboard"))
 			copyButton.ConnectClicked(func() {
 				a.clip(glib.NewValue(addr.String()))
-				a.win.Toast("Copied to clipboard")
+				a.win.Toast(locale.Get("Copied to clipboard"))
 			})
 
 			row := adw.NewActionRow()
@@ -120,7 +125,7 @@ func (page *SelfPage) init(a *App, status *tsutil.IPNStatus) {
 	)
 
 	ipListPlaceholder := adw.NewActionRow()
-	ipListPlaceholder.SetTitle("No addresses.")
+	ipListPlaceholder.SetTitle(locale.Get("No addresses."))
 	page.IPList.SetPlaceholder(ipListPlaceholder)
 
 	page.routeModel = gioutil.NewListModel[netip.Prefix]()
@@ -133,7 +138,7 @@ func (page *SelfPage) init(a *App, status *tsutil.IPNStatus) {
 			removeButton.SetMarginTop(12)
 			removeButton.SetMarginBottom(12)
 			removeButton.SetHasFrame(false)
-			removeButton.SetTooltipText("Remove")
+			removeButton.SetTooltipText(locale.Get("Remove"))
 			removeButton.ConnectClicked(func() {
 				routes := slices.Collect(xiter.Filter(page.routeModel.All(), func(p netip.Prefix) bool {
 					return p.Compare(route) != 0
@@ -155,7 +160,7 @@ func (page *SelfPage) init(a *App, status *tsutil.IPNStatus) {
 	)
 
 	advertisedRoutesListPlaceholder := adw.NewActionRow()
-	advertisedRoutesListPlaceholder.SetTitle("No advertised routes.")
+	advertisedRoutesListPlaceholder.SetTitle(locale.Get("No advertised routes."))
 	page.AdvertisedRoutesList.SetPlaceholder(advertisedRoutesListPlaceholder)
 
 	page.fileModel = gioutil.NewListModel[apitype.WaitingFile]()
@@ -167,7 +172,7 @@ func (page *SelfPage) init(a *App, status *tsutil.IPNStatus) {
 			saveButton.SetMarginTop(12)
 			saveButton.SetMarginBottom(12)
 			saveButton.SetHasFrame(false)
-			saveButton.SetTooltipText("Save")
+			saveButton.SetTooltipText(locale.Get("Save"))
 			saveButton.ConnectClicked(func() {
 				dialog := gtk.NewFileDialog()
 				dialog.SetModal(true)
@@ -189,13 +194,13 @@ func (page *SelfPage) init(a *App, status *tsutil.IPNStatus) {
 			deleteButton.SetMarginTop(12)
 			deleteButton.SetMarginBottom(12)
 			deleteButton.SetHasFrame(false)
-			deleteButton.SetTooltipText("Delete")
+			deleteButton.SetTooltipText(locale.Get("Delete"))
 			deleteButton.ConnectClicked(func() {
 				Confirmation{
-					Heading: "Delete file?",
-					Body:    "If you delete this file, you will no longer be able to save it to your local machine.",
-					Accept:  "_Delete",
-					Reject:  "_Cancel",
+					Heading: locale.Get("Delete file?"),
+					Body:    locale.Get("If you delete this file, you will no longer be able to save it to your local machine."),
+					Accept:  locale.Get("_Delete"),
+					Reject:  locale.Get("_Cancel"),
 				}.Show(a, func(accept bool) {
 					if accept {
 						err := tsutil.DeleteWaitingFile(context.TODO(), file.Name)
@@ -219,7 +224,7 @@ func (page *SelfPage) init(a *App, status *tsutil.IPNStatus) {
 	)
 
 	filesListPlaceholder := adw.NewActionRow()
-	filesListPlaceholder.SetTitle("No incoming files.")
+	filesListPlaceholder.SetTitle(locale.Get("No incoming files."))
 	page.FilesList.SetPlaceholder(filesListPlaceholder)
 
 	page.AdvertiseExitNodeRow.ActivatableWidget().(*gtk.Switch).ConnectStateSet(func(s bool) bool {
@@ -272,13 +277,27 @@ func (page *SelfPage) init(a *App, status *tsutil.IPNStatus) {
 		return true
 	})
 
+	page.AcceptDNSRow.ActivatableWidget().(*gtk.Switch).ConnectStateSet(func(s bool) bool {
+		if s == page.AcceptDNSRow.ActivatableWidget().(*gtk.Switch).State() {
+			return false
+		}
+
+		err := tsutil.AcceptDNS(context.TODO(), s)
+		if err != nil {
+			slog.Error("accept DNS", "err", err)
+			page.AcceptDNSRow.ActivatableWidget().(*gtk.Switch).SetActive(!s)
+			return true
+		}
+		return true
+	})
+
 	page.AdvertiseRouteButton.ConnectClicked(func() {
 		Prompt{
-			Heading:     "Add IP Prefix",
+			Heading:     locale.Get("Add IP Prefix"),
 			Placeholder: "10.0.0.0/24",
 			Responses: []PromptResponse{
-				{ID: "cancel", Label: "_Cancel"},
-				{ID: "add", Label: "_Add", Appearance: adw.ResponseSuggested, Default: true},
+				{ID: "cancel", Label: locale.Get("_Cancel")},
+				{ID: "add", Label: locale.Get("_Add"), Appearance: adw.ResponseSuggested, Default: true},
 			},
 		}.Show(a, "", func(response, val string) {
 			if response != "add" {
@@ -381,11 +400,10 @@ func (page *SelfPage) Actions() gio.ActionGrouper {
 	return page.actions
 }
 
-func (page *SelfPage) Init(row *PageRow) {
-	page.row = row
-	row.SetSubtitle("This machine")
-	page.row.SetIcon(selfIcon)
-	row.Row().AddCSSClass("self")
+func (page *SelfPage) Bind(stackPage *adw.ViewStackPage) {
+	page.stackPage = stackPage
+	stackPage.SetIconName("computer-symbolic")
+	page.applyIncomingBadge()
 }
 
 func (page *SelfPage) Update(status tsutil.Status) bool {
@@ -403,10 +421,14 @@ func (page *SelfPage) UpdateIPN(status *tsutil.IPNStatus) bool {
 	if !status.Online() {
 		return false
 	}
+	self, ok := status.Self()
+	if !ok {
+		return true
+	}
 
-	page.peer = status.NetMap.SelfNode
+	page.peer = self
 
-	page.row.SetTitle(peerName(page.peer))
+	page.stackPage.SetTitle(peerName(page.peer))
 
 	page.Page.SetTitle(page.peer.Hostinfo().Hostname())
 	page.Page.SetDescription(page.peer.Name())
@@ -417,6 +439,8 @@ func (page *SelfPage) UpdateIPN(status *tsutil.IPNStatus) bool {
 	page.AllowLANAccessRow.ActivatableWidget().(*gtk.Switch).SetActive(status.Prefs.ExitNodeAllowLANAccess())
 	page.AcceptRoutesRow.ActivatableWidget().(*gtk.Switch).SetState(status.Prefs.RouteAll())
 	page.AcceptRoutesRow.ActivatableWidget().(*gtk.Switch).SetActive(status.Prefs.RouteAll())
+	page.AcceptDNSRow.ActivatableWidget().(*gtk.Switch).SetState(status.Prefs.CorpDNS())
+	page.AcceptDNSRow.ActivatableWidget().(*gtk.Switch).SetActive(status.Prefs.CorpDNS())
 
 	routes := func(yield func(netip.Prefix) bool) {
 		for _, r := range status.Prefs.AdvertiseRoutes().All() {
@@ -436,5 +460,14 @@ func (page *SelfPage) UpdateIPN(status *tsutil.IPNStatus) bool {
 
 func (page *SelfPage) UpdateFiles(status *tsutil.FileStatus) bool {
 	listmodels.Update(page.fileModel, slices.Values(status.Files))
+	page.incomingFiles = len(status.Files)
+	page.applyIncomingBadge()
 	return true
+}
+
+func (page *SelfPage) applyIncomingBadge() {
+	if page.stackPage == nil {
+		return
+	}
+	page.stackPage.SetBadgeNumber(uint(page.incomingFiles))
 }

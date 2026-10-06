@@ -2,11 +2,12 @@ package ui
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"slices"
 	"time"
 
+	"deedles.dev/trayscale/internal/gutil"
+	"deedles.dev/trayscale/internal/locale"
 	"deedles.dev/trayscale/internal/metadata"
 	"deedles.dev/trayscale/internal/tsutil"
 	"deedles.dev/xiter"
@@ -29,19 +30,32 @@ func (a *App) initSettings(ctx context.Context) {
 	a.settings.ConnectChanged(func(key string) {
 		switch key {
 		case "tray-icon":
-			if a.settings.Boolean("tray-icon") {
-				glib.IdleAdd(func() {
-					a.initTray(ctx)
-				})
-				return
-			}
 			glib.IdleAdd(func() {
+				if a.settings.Boolean("tray-icon") {
+					a.initTray(ctx)
+					return
+				}
 				a.tray.Close()
 				a.tray = nil
 			})
 
 		case "polling-interval":
 			a.poller.SetInterval() <- a.getInterval()
+
+		case "taildrop-auto-save", "taildrop-auto-save-dir":
+			glib.IdleAdd(func() {
+				// New enable/dir selection should retry files that failed
+				// against the previous configuration.
+				a.clearAutoSaveFailures()
+				a.maybeAutoSaveFiles()
+			})
+
+		case "show-offline-peers":
+			glib.IdleAdd(func() {
+				if a.win != nil {
+					a.win.SetShowOffline(a.settings.Boolean("show-offline-peers"))
+				}
+			})
 		}
 	})
 
@@ -60,12 +74,12 @@ func (a *App) showChangeControlServer() {
 	status := <-a.poller.GetIPN()
 
 	Prompt{
-		Heading: "Control Server URL",
+		Heading: locale.Get("Control Server URL"),
 		Purpose: gtk.InputPurposeURL,
 		Responses: []PromptResponse{
-			{ID: "cancel", Label: "_Cancel"},
-			{ID: "default", Label: "Use _Default"},
-			{ID: "set", Label: "_Set URL", Appearance: adw.ResponseSuggested, Default: true},
+			{ID: "cancel", Label: locale.Get("_Cancel")},
+			{ID: "default", Label: locale.Get("Use _Default")},
+			{ID: "set", Label: locale.Get("_Set URL"), Appearance: adw.ResponseSuggested, Default: true},
 		},
 	}.Show(a, status.Prefs.ControlURL(), func(response, val string) {
 		switch response {
@@ -79,7 +93,7 @@ func (a *App) showChangeControlServer() {
 			err := tsutil.SetControlURL(ctx, val)
 			if err != nil {
 				slog.Error("update control plane server URL", "err", err, "url", val)
-				a.win.Toast(fmt.Sprintf("Error setting control URL: %v", err))
+				a.win.Toast(locale.Get("Error setting control URL: %v", err))
 				return
 			}
 			<-a.poller.Poll()
@@ -89,13 +103,74 @@ func (a *App) showChangeControlServer() {
 
 func (a *App) showPreferences() {
 	if a.settings == nil {
-		a.win.Toast("Settings schema not found")
+		a.win.Toast(locale.Get("Settings schema not found"))
 		return
 	}
 
 	dialog := NewPreferencesDialog()
 	a.settings.Bind("tray-icon", dialog.UseTrayIconRow.Object, "active", gio.SettingsBindDefault)
 	a.settings.Bind("polling-interval", dialog.PollingIntervalAdjustment.Object, "value", gio.SettingsBindDefault)
+	a.settings.Bind("taildrop-auto-save", dialog.TaildropAutoSaveRow.Object, "active", gio.SettingsBindDefault)
+
+	updateAutoSaveSubtitle := func() {
+		dir := a.settings.String("taildrop-auto-save-dir")
+		if dir == "" {
+			dialog.TaildropAutoSaveRow.SetSubtitle(locale.Get("No folder selected"))
+			return
+		}
+		dialog.TaildropAutoSaveRow.SetSubtitle(dir)
+	}
+	updateAutoSaveSubtitle()
+
+	// Location can only be changed while auto-save is enabled; the
+	// switch is the single enable control for the combined row.
+	syncFolderButton := func() {
+		dialog.TaildropAutoSaveFolderButton.SetSensitive(dialog.TaildropAutoSaveRow.Active())
+	}
+	syncFolderButton()
+	dialog.TaildropAutoSaveRow.Connect("notify::active", syncFolderButton)
+
+	selectFolder := func(onCancel func()) {
+		fileDialog := gtk.NewFileDialog()
+		fileDialog.SetModal(true)
+		fileDialog.SetTitle(locale.Get("Select Auto-save Folder"))
+		if dir := a.settings.String("taildrop-auto-save-dir"); dir != "" {
+			fileDialog.SetInitialFolder(gio.NewFileForPath(dir))
+		}
+		fileDialog.SelectFolder(context.TODO(), a.window(), func(res gio.AsyncResulter) {
+			folder, err := fileDialog.SelectFolderFinish(res)
+			if err != nil {
+				if !gutil.ErrHasCode(err, int(gtk.DialogErrorDismissed)) {
+					slog.Error("select auto-save folder", "err", err)
+				}
+				if onCancel != nil {
+					onCancel()
+				}
+				return
+			}
+			a.settings.SetString("taildrop-auto-save-dir", folder.Path())
+			updateAutoSaveSubtitle()
+		})
+	}
+
+	dialog.TaildropAutoSaveFolderButton.ConnectClicked(func() {
+		selectFolder(nil)
+	})
+
+	// Enabling without a directory prompts for a folder; cancel leaves
+	// auto-save off so the combined row never ends half-configured.
+	dialog.TaildropAutoSaveRow.Connect("notify::active", func() {
+		if !dialog.TaildropAutoSaveRow.Active() {
+			return
+		}
+		if a.settings.String("taildrop-auto-save-dir") != "" {
+			return
+		}
+		selectFolder(func() {
+			a.settings.SetBoolean("taildrop-auto-save", false)
+		})
+	})
+
 	dialog.PreferencesDialog.Present(a.window())
 }
 
